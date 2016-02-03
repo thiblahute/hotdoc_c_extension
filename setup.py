@@ -1,6 +1,5 @@
 import os, subprocess
 
-from pkg_resources import parse_version as V
 from setuptools import setup, find_packages
 from distutils.core import Extension
 from distutils.errors import DistutilsExecError
@@ -9,6 +8,7 @@ from distutils.spawn import spawn
 from distutils.command.build_ext import build_ext as _build_ext
 
 from utils.setup_utils import VersionList
+from distutils.version import LooseVersion as V
 
 source_dir = os.path.abspath('./')
 def src(filename):
@@ -86,6 +86,11 @@ except ValueError as e:
 if clang_bindings_version == V('3.7'):
     clang_bindings_version = V('3.7.dev234765')
 
+install_requires = [
+    'clang==%s' % str(clang_bindings_version),
+    'pkgconfig==1.1.0',
+]
+
 setup(
     name = "hotdoc_c_extension",
     version = "0.6.6",
@@ -104,8 +109,5 @@ setup(
     entry_points = {'hotdoc.extensions': 'get_extension_classes = hotdoc_c_extension.c_extension:get_extension_classes'},
     cmdclass = {'build_ext': build_ext},
     ext_modules = [c_comment_scanner_module],
-    install_requires = [
-        'clang==%s' % str(clang_bindings_version),
-        'pkgconfig==1.1.0',
-    ]
+    install_requires=install_requires
 )
