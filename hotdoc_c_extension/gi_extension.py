@@ -510,8 +510,7 @@ class GIExtension(Extension):
         return True
 
     def insert_language(self, ref, language):
-        p = pathlib.Path(ref)
-        return str(pathlib.Path(p.parts[0], language, *p.parts[1:]))
+        return language + '/' + ref
 
     def __translate_link_ref(self, link):
         page = self.project.tree.get_page_for_symbol(link.id_)
