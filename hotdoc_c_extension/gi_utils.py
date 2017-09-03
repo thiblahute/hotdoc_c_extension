@@ -16,7 +16,16 @@ else:
     DATADIR = "/usr/share"
 
 
-OUTPUT_LANGUAGES = ['c', 'python', 'javascript']
+class Lang:
+    c = 'c'
+    py = 'python'
+    js = 'javascript'
+
+    def all():
+        return [Lang.c, Lang.py, Lang.js]
+
+
+OUTPUT_LANGUAGES = Lang.all()
 
 
 # Describes the type of Return or Parameter symbols

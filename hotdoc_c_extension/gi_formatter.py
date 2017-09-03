@@ -94,7 +94,7 @@ class GIFormatter(Formatter):
 
     def _format_type_tokens(self, symbol, type_tokens):
         language = symbol.get_extension_attribute(self.extension.extension_name, 'language')
-        if language != 'c':
+        if language != Lang.c:
             type_desc = self.extension.get_attr(symbol, 'type_desc')
             assert(type_desc)
             gi_name = type_desc.gi_name
@@ -121,7 +121,7 @@ class GIFormatter(Formatter):
         return Formatter._format_type_tokens (self, symbol, type_tokens)
 
     def __add_annotations (self, symbol):
-        if self.extension.get_attr(symbol, 'language') == 'c':
+        if self.extension.get_attr(symbol, 'language') == Lang.c:
             annotations = self.__annotation_parser.make_annotations(symbol)
 
             # FIXME: OK this is format time but still seems strange
@@ -144,9 +144,9 @@ class GIFormatter(Formatter):
         if not is_void:
             language = retval[0].get_extension_attribute(self.extension.extension_name, 'language')
         else:
-            language = 'c'
+            language = Lang.c
 
-        if language == 'c':
+        if language == Lang.c:
             if is_void:
                 retval = [None]
             else:
@@ -166,7 +166,7 @@ class GIFormatter(Formatter):
     def _format_parameter_symbol (self, parameter):
         self.__add_annotations(parameter)
         language = parameter.get_extension_attribute(self.extension.extension_name, 'language')
-        if language != 'c':
+        if language != Lang.c:
             direction = parameter.get_extension_attribute ('gi-extension',
                     'direction')
             if direction == 'out':
@@ -184,7 +184,7 @@ class GIFormatter(Formatter):
             return Formatter._format_linked_symbol (self, symbol)
 
         language = symbol.get_extension_attribute(self.extension.extension_name, 'language')
-        if language == 'c':
+        if language == Lang.c:
             res = Formatter._format_linked_symbol (self, symbol)
             if symbol == None:
                 res = 'void'
@@ -201,7 +201,7 @@ class GIFormatter(Formatter):
 
     def _format_prototype (self, function, is_pointer, title):
         language = function.get_extension_attribute(self.extension.extension_name, 'language')
-        if language == 'c':
+        if language == Lang.c:
             return Formatter._format_prototype (self, function,
                     is_pointer, title)
 
@@ -213,7 +213,7 @@ class GIFormatter(Formatter):
 
         c_name = function._make_name()
 
-        if language == 'python':
+        if language == Lang.py:
             template = self.engine.get_template('python_prototype.html')
         else:
             template = self.engine.get_template('javascript_prototype.html')
@@ -237,17 +237,17 @@ class GIFormatter(Formatter):
     def _format_vfunction_symbol (self, vmethod):
         title = vmethod.link.title
         language = vmethod.get_extension_attribute(self.extension.extension_name, 'language')
-        if language == 'python':
+        if language == Lang.py:
             vmethod.link.title = 'do_%s' % vmethod._make_name()
             title = 'do_%s' % title
-        elif language == 'javascript':
+        elif language == Lang.js:
             vmethod.link.title = '%s::%s' % (vmethod.parent_name, vmethod._make_name())
             title = 'vfunc_%s' % title
         return Formatter._format_vfunction_symbol (self, vmethod)
 
     def _format_members_list (self, members, member_designation, struct):
         language = struct.get_extension_attribute(self.extension.extension_name, 'language')
-        if language != 'c':
+        if language != Lang.c:
             # Never render members that are in a union, introspected won't show them
             members = [m for m in members if not m.get_extension_attribute(
                 self.extension.extension_name, 'in_union')]
@@ -256,7 +256,7 @@ class GIFormatter(Formatter):
 
     def _format_struct (self, struct):
         language = struct.get_extension_attribute(self.extension.extension_name, 'language')
-        if language == 'c':
+        if language == Lang.c:
             return Formatter._format_struct (self, struct)
 
         members_list = self._format_members_list (struct.members, 'Attributes', struct)
@@ -268,11 +268,11 @@ class GIFormatter(Formatter):
 
     def _format_class_symbol (self, klass):
         saved_raw_text = klass.raw_text
-        if klass.get_extension_attribute(self.extension.extension_name, 'language') != 'c':
+        if klass.get_extension_attribute(self.extension.extension_name, 'language') != Lang.c:
             klass.raw_text = None
         out = Formatter._format_class_symbol(self, klass)
 
-        if klass.get_extension_attribute(self.extension.extension_name, 'language') == 'c':
+        if klass.get_extension_attribute(self.extension.extension_name, 'language') == Lang.c:
             # Render class structure if available.
             if klass.class_struct_symbol:
                 out += '<h3>Class structure</h3>'
@@ -283,7 +283,7 @@ class GIFormatter(Formatter):
 
     def _format_constant(self, constant):
         language = constant.get_extension_attribute(self.extension.extension_name, 'language')
-        if language == 'c':
+        if language == Lang.c:
             return Formatter._format_constant (self, constant)
 
         template = self.engine.get_template('constant.html')
@@ -312,21 +312,21 @@ class GIFormatter(Formatter):
     def _format_callable(self, callable_, callable_type, title,
                          is_pointer=False):
         language = callable_.get_extension_attribute(self.extension.extension_name, 'language')
-        if language == 'python' and isinstance(callable_, ClassMethodSymbol):
+        if language == Lang.py and isinstance(callable_, ClassMethodSymbol):
             return None
 
         return super()._format_callable(callable_, callable_type, title, is_pointer)
 
     def _format_property_symbol(self, prop):
         language = prop.get_extension_attribute(self.extension.extension_name, 'language')
-        if language == 'python':
+        if language == Lang.py:
             prop.link.title = 'self.props.%s' % prop.display_name.replace('-', '_')
 
         return super()._format_property_symbol(prop)
 
     def _format_alias(self, alias):
         language = alias.get_extension_attribute(self.extension.extension_name, 'language')
-        if language == 'c':
+        if language == Lang.c:
             return super()._format_alias(alias)
 
         return None

@@ -17,6 +17,7 @@
 # along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 from hotdoc.core.links import Link
+from hotdoc_c_extension.gi_utils import Lang
 
 
 def _create_javascript_fundamentals():
@@ -169,6 +170,6 @@ def _create_python_fundamentals():
 
     return fundamentals
 
-FUNDAMENTALS = {'javascript': _create_javascript_fundamentals(),
-        'python': _create_python_fundamentals(),
-        'c': {}}
+FUNDAMENTALS = {Lang.js: _create_javascript_fundamentals(),
+                Lang.py: _create_python_fundamentals(),
+                Lang.c: {}}

@@ -14,7 +14,7 @@ SMART_FILTERS = set()
 
 
 def __generate_smart_filters(id_prefixes, sym_prefixes, node):
-    sym_prefix = node.attrib['{%s}symbol-prefix' % NS_MAP['c']]
+    sym_prefix = node.attrib['{%s}symbol-prefix' % NS_MAP[Lang.c]]
     SMART_FILTERS.add(('%s_IS_%s' % (sym_prefixes, sym_prefix)).upper())
     SMART_FILTERS.add(('%s_TYPE_%s' % (sym_prefixes, sym_prefix)).upper())
     SMART_FILTERS.add(('%s_%s' % (sym_prefixes, sym_prefix)).upper())
@@ -74,41 +74,41 @@ def make_translations(unique_name, node):
     introspectable = not node.attrib.get('introspectable') == '0'
 
     if node.tag == core_ns('member'):
-        __TRANSLATED_NAMES['c'][unique_name] = unique_name
+        __TRANSLATED_NAMES[Lang.c][unique_name] = unique_name
         if introspectable:
             components = get_gi_name_components(node)
             components[-1] = components[-1].upper()
             gi_name = '.'.join(components)
-            __TRANSLATED_NAMES['python'][unique_name] = gi_name
-            __TRANSLATED_NAMES['javascript'][unique_name] = gi_name
+            __TRANSLATED_NAMES[Lang.py][unique_name] = gi_name
+            __TRANSLATED_NAMES[Lang.js][unique_name] = gi_name
     elif c_ns('identifier') in node.attrib:
-        __TRANSLATED_NAMES['c'][unique_name] = unique_name
+        __TRANSLATED_NAMES[Lang.c][unique_name] = unique_name
         if introspectable:
             components = get_gi_name_components(node)
             gi_name = '.'.join(components)
-            __TRANSLATED_NAMES['python'][unique_name] = gi_name
+            __TRANSLATED_NAMES[Lang.py][unique_name] = gi_name
             components[-1] = 'prototype.%s' % components[-1]
-            __TRANSLATED_NAMES['javascript'][unique_name] = '.'.join(components)
+            __TRANSLATED_NAMES[Lang.js][unique_name] = '.'.join(components)
     elif c_ns('type') in node.attrib:
         components = get_gi_name_components(node)
         gi_name = '.'.join(components)
-        __TRANSLATED_NAMES['c'][unique_name] = unique_name
+        __TRANSLATED_NAMES[Lang.c][unique_name] = unique_name
         if introspectable:
-            __TRANSLATED_NAMES['javascript'][unique_name] = gi_name
-            __TRANSLATED_NAMES['python'][unique_name] = gi_name
+            __TRANSLATED_NAMES[Lang.js][unique_name] = gi_name
+            __TRANSLATED_NAMES[Lang.py][unique_name] = gi_name
     elif node.tag == core_ns('field'):
         components = []
         get_field_c_name_components(node, components)
         display_name = '.'.join(components[1:])
-        __TRANSLATED_NAMES['c'][unique_name] = display_name
+        __TRANSLATED_NAMES[Lang.c][unique_name] = display_name
         if introspectable:
-            __TRANSLATED_NAMES['javascript'][unique_name] = display_name
-            __TRANSLATED_NAMES['python'][unique_name] = display_name
+            __TRANSLATED_NAMES[Lang.js][unique_name] = display_name
+            __TRANSLATED_NAMES[Lang.py][unique_name] = display_name
     else:
-        __TRANSLATED_NAMES['c'][unique_name] = node.attrib.get('name')
+        __TRANSLATED_NAMES[Lang.c][unique_name] = node.attrib.get('name')
         if introspectable:
-            __TRANSLATED_NAMES['python'][unique_name] = node.attrib.get('name')
-            __TRANSLATED_NAMES['javascript'][unique_name] = node.attrib.get('name')
+            __TRANSLATED_NAMES[Lang.py][unique_name] = node.attrib.get('name')
+            __TRANSLATED_NAMES[Lang.js][unique_name] = node.attrib.get('name')
 
 
 def get_translation(unique_name, language):
@@ -175,10 +175,10 @@ def cache_nodes(gir_root, all_girs):
     may link to, or be typed with
     '''
     ns_node = gir_root.find('./{%s}namespace' % NS_MAP['core'])
-    id_prefixes = ns_node.attrib['{%s}identifier-prefixes' % NS_MAP['c']]
-    sym_prefixes = ns_node.attrib['{%s}symbol-prefixes' % NS_MAP['c']]
+    id_prefixes = ns_node.attrib['{%s}identifier-prefixes' % NS_MAP[Lang.c]]
+    sym_prefixes = ns_node.attrib['{%s}symbol-prefixes' % NS_MAP[Lang.c]]
 
-    id_key = '{%s}identifier' % NS_MAP['c']
+    id_key = '{%s}identifier' % NS_MAP[Lang.c]
     for node in gir_root.xpath(
             './/*[@c:identifier]',
             namespaces=NS_MAP):

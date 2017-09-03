@@ -136,9 +136,9 @@ class GIExtension(Extension):
         self.languages = [l.lower() for l in config.get(
             'languages', [])]
         # Make sure C always gets formatted first
-        if 'c' in self.languages:
-            self.languages.remove ('c')
-            self.languages.insert (0, 'c')
+        if Lang.c in self.languages:
+            self.languages.remove (Lang.c)
+            self.languages.insert (0, Lang.c)
         if not self.languages:
             self.languages = OUTPUT_LANGUAGES
         for gir_file in self.sources:
@@ -147,7 +147,7 @@ class GIExtension(Extension):
 
     def __formatting_page(self, formatter, page):
         if ALL_GIRS:
-            page.meta['extra']['gi-languages'] = ['c', 'python', 'javascript']
+            page.meta['extra']['gi-languages'] = [Lang.c, Lang.py, Lang.js]
 
     def setup (self):
         for ext in self.project.extensions.values():
@@ -171,7 +171,7 @@ class GIExtension(Extension):
 
         prev_l = None
         page.meta['extra']['gi-languages'] = ','.join(self.languages)
-        page.meta['extra']['gi-language'] = 'c'
+        page.meta['extra']['gi-language'] = Lang.c
         Extension.format_page (self, page, link_resolver, output)
         page.meta['extra']['gi-language'] = self.languages[0]
 
@@ -179,7 +179,7 @@ class GIExtension(Extension):
 
     def write_out_page(self, output, page):
         prev_l = None
-        page.meta['extra']['gi-language'] = 'c'
+        page.meta['extra']['gi-language'] = Lang.c
         Extension.write_out_page (self, output, page)
 
     def get_or_create_symbol(self, *args, **kwargs):
@@ -596,7 +596,7 @@ class GIExtension(Extension):
         filename = self.__get_symbol_filename(name)
 
         alias_link = [l for l in type_desc.type_tokens if isinstance(l, Link)]
-        for lang in ('python', 'javascript'):
+        for lang in (Lang.py, Lang.js):
             fund_type = FUNDAMENTALS[lang].get(type_desc.c_name)
             if fund_type:
                 # The alias name is now conciderd as a FUNDAMENTAL type.
@@ -818,7 +818,7 @@ class GIExtension(Extension):
         if fund:
             return fund._title
 
-        if language != 'c' and not is_introspectable(link.id_, language):
+        if language != Lang.c and not is_introspectable(link.id_, language):
             return link._title + ' (not introspectable)'
 
         aliased_link = ALIASED_LINKS[language].get(link.id_)
@@ -829,14 +829,14 @@ class GIExtension(Extension):
         if translated:
             return translated
 
-        if language == 'c' and link.id_ in GTKDOC_HREFS:
+        if language == Lang.c and link.id_ in GTKDOC_HREFS:
             return link.id_
 
         return None
 
     def __translate_link_ref(self, link, language):
         if language == 'default':
-            actual_language = 'c'
+            actual_language = Lang.c
         else:
             actual_language = language
 
@@ -846,10 +846,10 @@ class GIExtension(Extension):
 
         extra_attrs = {}
         if language == 'default':
-            extra_attrs['data-gi-href-python'] = self.__translate_ref(link, 'python') or ref
-            extra_attrs['data-gi-href-javascript'] = self.__translate_ref(link, 'javascript') or ref
-            extra_attrs['data-gi-title-python'] = self.__translate_title(link, 'python')
-            extra_attrs['data-gi-title-javascript'] = self.__translate_title(link, 'javascript')
+            for lang in [Lang.py, Lang.js]:
+                extra_attrs['data-gi-href-%s' % lang] = self.__translate_ref(link, lang) or ref
+                extra_attrs['data-gi-title-%s' % lang] = self.__translate_title(link, lang)
+
         return ref, extra_attrs
 
     def __translate_link_title(self, link, language):
