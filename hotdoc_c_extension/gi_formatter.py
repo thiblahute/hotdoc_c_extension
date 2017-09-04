@@ -29,6 +29,7 @@ from .fundamentals import FUNDAMENTALS
 from hotdoc_c_extension.gi_node_cache import ALL_GI_TYPES, is_introspectable
 from hotdoc_c_extension.gi_symbols import GIClassSymbol
 from hotdoc_c_extension.gi_annotation_parser import GIAnnotationParser
+from hotdoc_c_extension.gi_utils import Lang
 
 
 class GIFormatter(Formatter):
@@ -54,38 +55,27 @@ class GIFormatter(Formatter):
         for csym in symbol.get_children_symbols():
             self.__add_attrs(csym, **kwargs)
 
-    def __wrap_in_language(self, symbol, c_doc, python_doc, js_doc):
+    def __wrap_in_language(self, symbol, langs_doc):
         template = self.get_template('symbol_language_wrapper.html')
-        res = template.render(
-                {'symbol': symbol,
-                 'c_doc': c_doc,
-                 'python_doc': python_doc,
-                 'js_doc': js_doc})
+        res = template.render( {'symbol': symbol, 'langs_doc': langs_doc})
         return res
 
-    def _format_symbol (self, symbol):
+    def _format_symbol(self, symbol):
         if isinstance(symbol, (QualifiedSymbol, FieldSymbol, EnumMemberSymbol)):
             return Formatter._format_symbol(self, symbol)
 
-        self.extension.setup_language('c', None)
-        self.__add_attrs(symbol, language='c')
+        langs_doc = {}
+        prev_lang = None
+        for lang in Lang.all():
+            langs_doc[lang] = None
+            if is_introspectable(symbol.unique_name, lang):
+                self.extension.setup_language(lang, prev_lang)
+                self.__add_attrs(symbol, language=lang)
+                langs_doc[lang] = Formatter._format_symbol(self, symbol)
+            prev_lang = lang
 
-        c_out = Formatter._format_symbol(self, symbol)
-        python_out = None
-        js_out = None
-
-        self.extension.setup_language('python', 'c')
-        if is_introspectable(symbol.unique_name, 'python'):
-            self.__add_attrs(symbol, language='python')
-            python_out = Formatter._format_symbol(self, symbol)
-
-        self.extension.setup_language('javascript', 'python')
-        if is_introspectable(symbol.unique_name, 'javascript'):
-            self.__add_attrs(symbol, language='javascript')
-            js_out = Formatter._format_symbol(self, symbol)
-
-        self.extension.setup_language(None, 'javascript')
-        return self.__wrap_in_language(symbol, c_out, python_out, js_out)
+        self.extension.setup_language(None, prev_lang)
+        return self.__wrap_in_language(symbol, langs_doc)
 
     def _format_flags (self, flags):
         template = self.engine.get_template('gi_flags.html')

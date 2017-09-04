@@ -64,6 +64,11 @@ def get_field_c_name(node):
     return '.'.join(components)
 
 
+def set_translated_name(unique_name, c, py, js):
+    __TRANSLATED_NAMES[Lang.c][unique_name] = c
+    __TRANSLATED_NAMES[Lang.py][unique_name] = py
+    __TRANSLATED_NAMES[Lang.js][unique_name] = js
+
 def make_translations(unique_name, node):
     '''
     Compute and store the title that should be displayed
@@ -72,43 +77,39 @@ def make_translations(unique_name, node):
     Test.Greeter.greet
     '''
     introspectable = not node.attrib.get('introspectable') == '0'
+    c = py = js = None
 
     if node.tag == core_ns('member'):
-        __TRANSLATED_NAMES[Lang.c][unique_name] = unique_name
+        c = unique_name
         if introspectable:
             components = get_gi_name_components(node)
             components[-1] = components[-1].upper()
-            gi_name = '.'.join(components)
-            __TRANSLATED_NAMES[Lang.py][unique_name] = gi_name
-            __TRANSLATED_NAMES[Lang.js][unique_name] = gi_name
+            js = py = '.'.join(components)
     elif c_ns('identifier') in node.attrib:
-        __TRANSLATED_NAMES[Lang.c][unique_name] = unique_name
+        c =  unique_name
         if introspectable:
             components = get_gi_name_components(node)
-            gi_name = '.'.join(components)
-            __TRANSLATED_NAMES[Lang.py][unique_name] = gi_name
+            py = gi_name = '.'.join(components)
             components[-1] = 'prototype.%s' % components[-1]
-            __TRANSLATED_NAMES[Lang.js][unique_name] = '.'.join(components)
+            js =  '.'.join(components)
     elif c_ns('type') in node.attrib:
-        components = get_gi_name_components(node)
-        gi_name = '.'.join(components)
-        __TRANSLATED_NAMES[Lang.c][unique_name] = unique_name
+        c = unique_name
         if introspectable:
-            __TRANSLATED_NAMES[Lang.js][unique_name] = gi_name
-            __TRANSLATED_NAMES[Lang.py][unique_name] = gi_name
+            components = get_gi_name_components(node)
+            py = js = gi_name = '.'.join(components)
+
     elif node.tag == core_ns('field'):
         components = []
         get_field_c_name_components(node, components)
         display_name = '.'.join(components[1:])
-        __TRANSLATED_NAMES[Lang.c][unique_name] = display_name
+        c = display_name
         if introspectable:
-            __TRANSLATED_NAMES[Lang.js][unique_name] = display_name
-            __TRANSLATED_NAMES[Lang.py][unique_name] = display_name
+            py = cs = display_name
     else:
-        __TRANSLATED_NAMES[Lang.c][unique_name] = node.attrib.get('name')
+        c = node.attrib.get('name')
         if introspectable:
-            __TRANSLATED_NAMES[Lang.py][unique_name] = node.attrib.get('name')
-            __TRANSLATED_NAMES[Lang.js][unique_name] = node.attrib.get('name')
+            py = js = node.attrib.get('name')
+    set_translated_name(unique_name, c, py, js)
 
 
 def get_translation(unique_name, language):
@@ -299,6 +300,9 @@ def is_introspectable(name, language):
     '''
     Do not call this before caching the nodes
     '''
+    if language == Lang.c:
+        return True
+
     if name in FUNDAMENTALS[language]:
         return True
 

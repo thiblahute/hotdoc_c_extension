@@ -1,15 +1,9 @@
-@require(symbol, c_doc, python_doc, js_doc)
+@require(symbol, langs_doc)
 
-<div class="gi-symbol gi-symbol-c">
-	@c_doc
-</div>
-@if python_doc:
-<div class="gi-symbol gi-symbol-python">
-	@python_doc
-</div>
-@end
-@if js_doc:
-<div class="gi-symbol gi-symbol-javascript">
-	@js_doc
-</div>
+@for lang, doc in langs_doc.items():
+    @if doc:
+        <div class="gi-symbol gi-symbol-@lang">
+            @doc
+        </div>
+    @end
 @end

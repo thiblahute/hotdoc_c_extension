@@ -147,7 +147,7 @@ class GIExtension(Extension):
 
     def __formatting_page(self, formatter, page):
         if ALL_GIRS:
-            page.meta['extra']['gi-languages'] = [Lang.c, Lang.py, Lang.js]
+            page.meta['extra']['gi-languages'] = Lang.all()
 
     def setup (self):
         for ext in self.project.extensions.values():
