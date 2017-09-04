@@ -20,9 +20,10 @@ class Lang:
     c = 'c'
     py = 'python'
     js = 'javascript'
+    cs = 'csharp'
 
     def all():
-        return [Lang.c, Lang.py, Lang.js]
+        return [Lang.c, Lang.py, Lang.cs, Lang.js]
 
 
 OUTPUT_LANGUAGES = Lang.all()
@@ -30,7 +31,7 @@ OUTPUT_LANGUAGES = Lang.all()
 
 # Describes the type of Return or Parameter symbols
 SymbolTypeDesc = namedtuple('SymbolTypeDesc', [
-    'type_tokens', 'gi_name', 'c_name', 'nesting_depth'])
+    'type_tokens', 'gi_name', 'c_name', 'nesting_depth', 'is_out'])
 
 
 def core_ns(tag):

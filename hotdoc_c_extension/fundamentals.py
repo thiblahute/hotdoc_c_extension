@@ -19,6 +19,49 @@
 from hotdoc.core.links import Link
 from hotdoc_c_extension.gi_utils import Lang
 
+def _create_csharp_fundamentals():
+    def ms(page, name=None, section='csharp/language-reference/keywords'):
+        if not name:
+            name = page
+        return Link('https://docs.microsoft.com/en-us/dotnet/%s/%s' % (section, page), name, name)
+
+    def glib(page):
+        return Link('http://docs.go-mono.com/?link=T%3aGLib.' + page, 'GLib.' + page, None)
+
+    return {
+        'out': ms('out'),
+        'gchararray': ms('string'),
+        'gunichar': ms('string'),
+        'utf8': ms('string'),
+        'gchar': ms('char'),
+        'guchar': ms('byte'),
+        'gint8': ms('sbyte'),
+        'guint8': ms('byte'),
+        'gint16': ms('short'),
+        'guint16': ms('ushort'),
+        'gint32': ms('int'),
+        'guint32': ms('uint'),
+        'gint64': ms('long'),
+        'guint64': ms('long'),
+        'gshort': ms('short'),
+        'gint': ms('int'),
+        'guint': ms('uint'),
+        'glong': ms('long'),
+        'gulong': ms('long'),
+        'gsize': ms('int'),
+        'gssize': ms('long'),
+        'gintptr': ms('system.intptr', 'IntPtr', 'api'),
+        'guintptr': ms('system.uintptr', 'UIntPtr', 'api'),
+        'gfloat': ms('float'),
+        'gdouble': ms('double'),
+        'gboolean': ms('bool'),
+        'TRUE': ms('true'),
+        'FALSE': ms('false'),
+        'gpointer': ms('system.intptr', 'IntPtr', 'api/'),
+        'NULL': ms('null'),
+        'GObject': glib('Object'),
+    }
+
 
 def _create_javascript_fundamentals():
     string_link = \
@@ -172,4 +215,6 @@ def _create_python_fundamentals():
 
 FUNDAMENTALS = {Lang.js: _create_javascript_fundamentals(),
                 Lang.py: _create_python_fundamentals(),
-                Lang.c: {}}
+                Lang.c: {},
+                Lang.cs: _create_csharp_fundamentals(),
+                }

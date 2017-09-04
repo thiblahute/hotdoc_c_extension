@@ -23,6 +23,7 @@ source files. Parsing the comments ourself allows us to smartly build
 the index based on the comments location.
 """
 
+import copy
 import os
 
 from lxml import etree
@@ -46,7 +47,7 @@ from .utils.utils import CCommentExtractor
 from hotdoc_c_extension.gi_flags import *
 from hotdoc_c_extension.gi_utils import *
 from hotdoc_c_extension.gi_node_cache import (
-        SMART_FILTERS, make_translations, get_translation, get_klass_parents,
+        SMART_FILTERS, make_translations, get_translation, set_translated_name, get_klass_parents,
         get_klass_children, cache_nodes, type_description_from_node,
         is_introspectable)
 from hotdoc_c_extension.gi_gtkdoc_links import GTKDOC_HREFS
@@ -246,6 +247,66 @@ class GIExtension(Extension):
         return None
 
     # setup-time private methods
+    def __csharp_process_function(self, function, node):
+        """In csharp, getters/setter are converted to properties."""
+        title = get_translation(function.unique_name, 'csharp')
+        if not title:
+            return
+
+        if function.parent_name:
+            parent = self.app.database.get_symbol(function.parent_name)
+            if isinstance(parent, InterfaceSymbol):
+                self.add_attrs(function, parent_is_interface=True)
+
+        components = title.split('.')
+        name = components[-1]
+        if not (isinstance(function, MethodSymbol)):
+            return
+
+        is_getter = (name.startswith('Has') or name.startswith('Get')) and \
+            len(function.return_value) == 1 and \
+            function.return_value[0] and \
+            function.return_value[0].input_tokens[0] != 'void' and \
+            len(function.parameters) == 1
+
+        is_setter = (name.startswith('Set')) and \
+            len(function.return_value) == 1 and \
+            function.return_value[0] == None and \
+            len(function.parameters) == 2
+
+        if not is_setter and not is_getter:
+            return
+
+        # Avoid unique name clashes, this should not be needed once we handle override.
+        unique_name = '.'.join(components[:-1]) + ':Cs' + components[-1][3:]
+        display_name = '.'.join(components[:-1]) + '.' + components[-1][3:]
+        print("Yay %s -> %s" % (function.unique_name, display_name))
+
+        if is_getter:
+            type_desc = copy.deepcopy(self.get_attr(function.return_value[0], 'type_desc'))
+        else:
+            type_desc = copy.deepcopy(self.get_attr(function.parameters[1], 'type_desc'))
+        type_ = QualifiedSymbol(type_tokens=type_desc.type_tokens)
+        self.add_attrs(type_, type_desc=type_desc)
+
+        prop = self.app.database.get_symbol(unique_name)
+        if not prop:
+            prop = self.get_or_create_symbol(PropertySymbol, node,
+                    # FIXME Check if there is any problem about sharing the same symbol
+                    prop_type=type_,
+                    display_name=display_name,
+                    unique_name=unique_name,
+                    filename=function.filename,
+                    parent_name=function.parent_name)
+            comment = self.app.database.get_comment(function.unique_name)
+            if comment:
+                self.app.database.add_comment(Comment(name=unique_name, description=comment.description))
+
+        self.add_attrs(function, csharp_prop=True)
+        self.add_attrs(prop, csharp_prop=True,
+                       flags=self.get_attr(prop, 'flags', []) + [
+                           ReadableFlag() if is_getter else WritableFlag()])
+        set_translated_name(unique_name, None, None, None,  display_name)
 
     def __get_symbol_filename(self, unique_name):
         if self.__current_output_filename:
@@ -409,7 +470,8 @@ class GIExtension(Extension):
             direction = 'in'
 
         res = ParameterSymbol(argname=param_name, type_tokens=type_desc.type_tokens)
-        self.add_attrs(res, type_desc=type_desc, direction=direction)
+        self.add_attrs(res, type_desc=type_desc, direction=direction,
+                       instance_param=gi_parameter.tag == core_ns('instance-parameter'))
 
         return res, direction
 
@@ -506,13 +568,13 @@ class GIExtension(Extension):
         parent_link = Link(None, parent_name, parent_name)
 
         instance_param = ParameterSymbol(argname='self', type_tokens=[parent_link, '*'])
-        type_desc = SymbolTypeDesc ([], parent_gi_name, None, 0)
+        type_desc = SymbolTypeDesc ([], parent_gi_name, None, 0, False)
         self.add_attrs (instance_param, type_desc=type_desc, direction='in')
         parameters.insert (0, instance_param)
 
         udata_link = Link(None, 'gpointer', 'gpointer')
         udata_param = ParameterSymbol(argname='user_data', type_tokens=[udata_link])
-        type_desc = SymbolTypeDesc ([], 'gpointer', None, 0)
+        type_desc = SymbolTypeDesc ([], 'gpointer', None, 0, False)
         self.add_attrs (udata_param, type_desc=type_desc, direction='in')
         parameters.append (udata_param)
 
@@ -571,8 +633,7 @@ class GIExtension(Extension):
                 filename=self.__get_symbol_filename(klass_name),
                 parent_name=parent_name)
 
-        extra_content = self.formatter._format_flags (flags)
-        res.extension_contents['Flags'] = extra_content
+        self.add_attrs(res, flags=flags)
 
         return res
 
@@ -765,6 +826,7 @@ class GIExtension(Extension):
                                          throws='throws' in node.attrib,
                                          filename=self.__get_symbol_filename(name),
                                          parent_name=parent_name)
+        self.__csharp_process_function(func, node)
 
         self.__sort_parameters (func, func.return_value, func.parameters)
         return func
@@ -873,7 +935,7 @@ class GIExtension(Extension):
 
         extra_attrs = {}
         if language == 'default':
-            for lang in {Lang.py, Lang.js} & self.languages:
+            for lang in {Lang.py, Lang.js, Lang.cs} & self.languages:
                 extra_attrs['data-gi-href-%s' % lang] = self.__translate_ref(link, lang) or ref
                 extra_attrs['data-gi-title-%s' % lang] = self.__translate_title(link, lang)
 

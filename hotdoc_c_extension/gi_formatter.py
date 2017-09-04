@@ -99,14 +99,25 @@ class GIFormatter(Formatter):
                 ctype_name = ALL_GI_TYPES[gi_name]
                 link = self.extension.app.link_resolver.get_named_link(ctype_name)
 
-            if type_desc.nesting_depth:
-                new_tokens.append('[' * type_desc.nesting_depth + ' ')
-            if link:
-                new_tokens.append(link)
-            else: # Should not happen but let's be conservative
-                new_tokens.append(type_desc.gi_name)
-            if type_desc.nesting_depth:
-                new_tokens.append(']' * type_desc.nesting_depth)
+            if language == Lang.cs:
+                if type_desc.is_out:
+                    new_tokens += [FUNDAMENTALS[Lang.cs]['out'], ' ']
+                if link:
+                    new_tokens.append(link)
+                else: # Should not happen but let's be conservative
+                    new_tokens.append(type_desc.gi_name)
+
+                if type_desc.nesting_depth:
+                    new_tokens.append('[]')
+            else:
+                if type_desc.nesting_depth:
+                    new_tokens.append('[' * type_desc.nesting_depth + ' ')
+                if link:
+                    new_tokens.append(link)
+                else: # Should not happen but let's be conservative
+                    new_tokens.append(type_desc.gi_name)
+                if type_desc.nesting_depth:
+                    new_tokens.append(']' * type_desc.nesting_depth)
 
             return Formatter._format_type_tokens (self, symbol, new_tokens)
 
@@ -138,7 +149,7 @@ class GIFormatter(Formatter):
         else:
             language = Lang.c
 
-        if language == Lang.c:
+        if language in [Lang.c, Lang.cs]:
             if is_void:
                 retval = [None]
             else:
@@ -156,11 +167,13 @@ class GIFormatter(Formatter):
         return Formatter._format_return_value_symbol (self, *args)
 
     def _format_parameter_symbol (self, parameter):
-        self.__add_annotations(parameter)
         language = parameter.get_extension_attribute(self.extension.extension_name, 'language')
-        if language != Lang.c:
-            direction = parameter.get_extension_attribute ('gi-extension',
-                    'direction')
+        if language == Lang.cs and self.extension.get_attr(parameter, 'instance_param'):
+            return None
+
+        self.__add_annotations(parameter)
+        direction = self.extension.get_attr(parameter, 'direction')
+        if language in [Lang.py, Lang.js]:
             if direction == 'out':
                 return None
 
@@ -193,11 +206,21 @@ class GIFormatter(Formatter):
 
     def _format_prototype (self, function, is_pointer, title):
         language = function.get_extension_attribute(self.extension.extension_name, 'language')
+
         if language == Lang.c:
             return Formatter._format_prototype (self, function,
                     is_pointer, title)
 
         params = function.get_extension_attribute ('gi-extension', 'parameters')
+
+        if language == Lang.cs:
+            params = function.parameters
+
+            function.parameters = [p for p in params if not self.extension.get_attr(p, 'instance_param')]
+            res = Formatter._format_prototype (self, function, is_pointer, title)
+            function.parameters = params
+
+            return res
 
         if params is None:
             return Formatter._format_prototype (self, function,
@@ -207,7 +230,7 @@ class GIFormatter(Formatter):
 
         if language == Lang.py:
             template = self.engine.get_template('python_prototype.html')
-        else:
+        elif language == Lang.js:
             template = self.engine.get_template('javascript_prototype.html')
 
         if type (function) == SignalSymbol:
@@ -304,13 +327,26 @@ class GIFormatter(Formatter):
     def _format_callable(self, callable_, callable_type, title,
                          is_pointer=False):
         language = callable_.get_extension_attribute(self.extension.extension_name, 'language')
-        if language == Lang.py and isinstance(callable_, ClassMethodSymbol):
+
+        if language == Lang.cs:
+            if self.extension.get_attr(callable_, 'csharp_prop'):
+                print("%s IS prop" % callable_.unique_name)
+                return ''
+        elif language == Lang.py and isinstance(callable_, ClassMethodSymbol):
             return None
 
         return super()._format_callable(callable_, callable_type, title, is_pointer)
 
     def _format_property_symbol(self, prop):
         language = prop.get_extension_attribute(self.extension.extension_name, 'language')
+
+        flags = self.extension.get_attr(prop, 'flags')
+        extra_content = self._format_flags (flags)
+        prop.extension_contents['Flags'] = extra_content
+
+        if language != Lang.cs and self.extension.get_attr(prop, 'csharp_prop'):
+            return ''
+
         if language == Lang.py:
             prop.link.title = 'self.props.%s' % prop.display_name.replace('-', '_')
 

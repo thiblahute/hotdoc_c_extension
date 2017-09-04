@@ -49,6 +49,7 @@ def __find_gir_file(gir_name, all_girs):
 
 
 __TRANSLATED_NAMES = {l: {} for l in OUTPUT_LANGUAGES}
+__CS_INTERFACES_NAMES = {}
 
 
 def get_field_c_name_components(node, components):
@@ -64,20 +65,26 @@ def get_field_c_name(node):
     return '.'.join(components)
 
 
-def set_translated_name(unique_name, c, py, js):
+def __camel_case(components):
+    if isinstance(components, list):
+        return '.'.join([c for c in components[:-1]]) + '.' + __camel_case(components[-1])
+
+    return ''.join(x for x in components.title() if x not in [' ', '_', '-'])
+
+def set_translated_name(unique_name, c, py, js, cs):
     __TRANSLATED_NAMES[Lang.c][unique_name] = c
     __TRANSLATED_NAMES[Lang.py][unique_name] = py
     __TRANSLATED_NAMES[Lang.js][unique_name] = js
+    __TRANSLATED_NAMES[Lang.cs][unique_name] = cs
 
 def make_translations(unique_name, node):
-    '''
-    Compute and store the title that should be displayed
+    '''Compute and store the title that should be displayed
     when linking to a given unique_name, eg in python
     when linking to test_greeter_greet() we want to display
     Test.Greeter.greet
     '''
     introspectable = not node.attrib.get('introspectable') == '0'
-    c = py = js = None
+    c = py = js = cs = None
 
     if node.tag == core_ns('member'):
         c = unique_name
@@ -85,19 +92,35 @@ def make_translations(unique_name, node):
             components = get_gi_name_components(node)
             components[-1] = components[-1].upper()
             js = py = '.'.join(components)
+            cs = __camel_case(components)
     elif c_ns('identifier') in node.attrib:
         c =  unique_name
         if introspectable:
             components = get_gi_name_components(node)
             py = gi_name = '.'.join(components)
-            components[-1] = 'prototype.%s' % components[-1]
-            js =  '.'.join(components)
+            js = '.'.join(components[:-2] + ['prototype.%s' % components[-1]])
+
+            if node.tag == core_ns('constructor'):
+                cs = '.'.join(components[:-1])
+            else:
+                iname = __CS_INTERFACES_NAMES.get('.'.join(components[:-1]))
+                if iname:
+                    cs = iname + '.' + __camel_case(components[-1])
+                else:
+                    cs = __camel_case(components)
     elif c_ns('type') in node.attrib:
         c = unique_name
         if introspectable:
             components = get_gi_name_components(node)
             py = js = gi_name = '.'.join(components)
 
+            if node.tag == core_ns ('constant'):
+                cs = '.'.join([components[0], 'Constants'] + components[1:])
+            elif node.tag == core_ns ('interface'):
+                cs = '.'.join(components[:-1] + ['I' + components[-1]])
+                __CS_INTERFACES_NAMES['.'.join(components)] = cs
+            else:
+                cs = gi_name
     elif node.tag == core_ns('field'):
         components = []
         get_field_c_name_components(node, components)
@@ -105,11 +128,14 @@ def make_translations(unique_name, node):
         c = display_name
         if introspectable:
             py = cs = display_name
+            cs = __camel_case(components)
     else:
         c = node.attrib.get('name')
         if introspectable:
             py = js = node.attrib.get('name')
-    set_translated_name(unique_name, c, py, js)
+            cs = __camel_case(node.attrib.get('name'))
+
+    set_translated_name(unique_name, c, py, js, cs)
 
 
 def get_translation(unique_name, language):
@@ -137,7 +163,7 @@ def __get_parent_link_recurse(gi_name, res):
     ctype_name = ALL_GI_TYPES[gi_name]
     qs = QualifiedSymbol(type_tokens=[Link(None, ctype_name, ctype_name)])
     qs.add_extension_attribute ('gi-extension', 'type_desc',
-            SymbolTypeDesc([], gi_name, ctype_name, 0))
+            SymbolTypeDesc([], gi_name, ctype_name, 0, False))
     res.append(qs)
 
 
@@ -165,7 +191,7 @@ def get_klass_children(gi_name):
         ctype_name = ALL_GI_TYPES[gi_name]
         qs = QualifiedSymbol(type_tokens=[Link(None, ctype_name, ctype_name)])
         qs.add_extension_attribute ('gi-extension', 'type_desc',
-                SymbolTypeDesc([], gi_name, ctype_name, 0))
+                SymbolTypeDesc([], gi_name, ctype_name, 0, False))
         res[ctype_name] = qs
     return res
 
@@ -293,7 +319,8 @@ def type_description_from_node(gi_node):
     if namespaced in ALL_GI_TYPES:
         gi_name = namespaced
 
-    return SymbolTypeDesc(type_tokens, gi_name, ctype_name, array_nesting)
+    return SymbolTypeDesc(type_tokens, gi_name, ctype_name, array_nesting,
+                          gi_node.attrib.get('direction') == 'out')
 
 
 def is_introspectable(name, language):
