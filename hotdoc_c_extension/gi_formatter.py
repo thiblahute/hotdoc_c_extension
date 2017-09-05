@@ -86,42 +86,45 @@ class GIFormatter(Formatter):
 
     def _format_type_tokens(self, symbol, type_tokens):
         language = symbol.get_extension_attribute(self.extension.extension_name, 'language')
-        if language != Lang.c:
-            type_desc = self.extension.get_attr(symbol, 'type_desc')
-            assert(type_desc)
-            gi_name = type_desc.gi_name
-            new_tokens = []
-            link = None
-            if gi_name in FUNDAMENTALS[language]:
-                fund_link = FUNDAMENTALS[language][gi_name]
-                link = Link(fund_link.ref, fund_link._title, gi_name)
-            elif gi_name in ALL_GI_TYPES:
-                ctype_name = ALL_GI_TYPES[gi_name]
-                link = self.extension.app.link_resolver.get_named_link(ctype_name)
+        if language == Lang.c:
+            return Formatter._format_type_tokens (self, symbol, type_tokens)
 
-            if language == Lang.cs:
-                if type_desc.is_out:
-                    new_tokens += [FUNDAMENTALS[Lang.cs]['out'], ' ']
-                if link:
-                    new_tokens.append(link)
-                else: # Should not happen but let's be conservative
-                    new_tokens.append(type_desc.gi_name)
+        type_desc = self.extension.get_attr(symbol, 'type_desc')
+        assert(type_desc)
+        gi_name = type_desc.gi_name
+        new_tokens = []
+        link = None
+        if gi_name in FUNDAMENTALS[language]:
+            fund_link = FUNDAMENTALS[language][gi_name]
+            link = Link(fund_link.ref, fund_link._title, gi_name)
+        elif gi_name in ALL_GI_TYPES:
+            ctype_name = ALL_GI_TYPES[gi_name]
+            link = self.extension.app.link_resolver.get_named_link(ctype_name)
 
-                if type_desc.nesting_depth:
-                    new_tokens.append('[]')
-            else:
-                if type_desc.nesting_depth:
-                    new_tokens.append('[' * type_desc.nesting_depth + ' ')
-                if link:
-                    new_tokens.append(link)
-                else: # Should not happen but let's be conservative
-                    new_tokens.append(type_desc.gi_name)
-                if type_desc.nesting_depth:
-                    new_tokens.append(']' * type_desc.nesting_depth)
+        if language == Lang.cs:
+            if type_desc.is_out:
+                new_tokens += [FUNDAMENTALS[Lang.cs]['out'], ' ']
+            if not link:
+                link = self.extension.get_attr(symbol, 'cs_link')
 
-            return Formatter._format_type_tokens (self, symbol, new_tokens)
+            if link:
+                new_tokens.append(link)
+            else: # Should not happen but let's be conservative
+                new_tokens.append(type_desc.gi_name)
 
-        return Formatter._format_type_tokens (self, symbol, type_tokens)
+            if type_desc.nesting_depth:
+                new_tokens.append('[]')
+        else:
+            if type_desc.nesting_depth:
+                new_tokens.append('[' * type_desc.nesting_depth + ' ')
+            if link:
+                new_tokens.append(link)
+            else: # Should not happen but let's be conservative
+                new_tokens.append(type_desc.gi_name)
+            if type_desc.nesting_depth:
+                new_tokens.append(']' * type_desc.nesting_depth)
+
+        return Formatter._format_type_tokens (self, symbol, new_tokens)
 
     def __add_annotations (self, symbol):
         if self.extension.get_attr(symbol, 'language') == Lang.c:
@@ -280,6 +283,12 @@ class GIFormatter(Formatter):
         out = template.render ({"symbol": struct,
                                 "members_list": members_list})
         return out
+
+    def _format_interfaces(self, klass, interfaces):
+        language = klass.get_extension_attribute(self.extension.extension_name, 'language')
+        interfaces = self.extension.get_attr(klass, language + '_interfaces', klass.interfaces)
+
+        return super()._format_interfaces(klass, interfaces)
 
     def _format_class_symbol (self, klass):
         saved_raw_text = klass.raw_text

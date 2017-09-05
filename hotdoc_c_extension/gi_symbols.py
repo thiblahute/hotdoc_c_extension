@@ -16,6 +16,7 @@
 # along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
 from hotdoc.core.symbols import *
+from hotdoc_c_extension.gi_utils import Lang
 
 class GIClassSymbol(ClassSymbol):
     def __init__(self, **kwargs):
@@ -23,7 +24,11 @@ class GIClassSymbol(ClassSymbol):
         ClassSymbol.__init__(self, **kwargs)
 
     def get_children_symbols(self):
-        return [self.class_struct_symbol] + super().get_children_symbols()
+        extra_children = [self.class_struct_symbol]
+        for lang in Lang.all():
+            extra_children += self.get_extension_attribute('gi-extension',
+                                                   lang + '_interfaces', [])
+        return extra_children + super().get_children_symbols()
 
 class GIStructSymbol(ClassSymbol):
     """Boxed types are pretty much handled like classes with a possible
@@ -34,3 +39,10 @@ class GIStructSymbol(ClassSymbol):
     def __init__(self, **kwargs):
         self.class_struct_symbol = None
         ClassSymbol.__init__(self, **kwargs)
+
+    def get_children_symbols(self):
+        extra_children = []
+        for lang in Lang.all():
+            extra_children += self.get_extension_attribute('gi-extension',
+                                                   lang + '_interfaces', [])
+        return extra_children + super().get_children_symbols()

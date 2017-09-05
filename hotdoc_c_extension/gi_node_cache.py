@@ -5,7 +5,7 @@ import networkx as nx
 from hotdoc.core.symbols import QualifiedSymbol
 from hotdoc_c_extension.gi_utils import *
 from hotdoc_c_extension.fundamentals import FUNDAMENTALS
-
+from hotdoc.utils.loggable import info
 
 '''
 Names of boilerplate GObject macros we don't want to expose
@@ -218,6 +218,8 @@ def get_klass_children(gi_name):
         res[ctype_name] = qs
     return res
 
+CS_IMPLEMENTED_INTERFACES = {}
+
 def get_unique_name_from_gapi(node):
     cname = node.attrib.get('cname')
     sep = None
@@ -245,12 +247,37 @@ def get_display_name_from_gapi(node, components):
         return components[-1]
     return '.'.join(components)
 
+def __cache_gapi_interfaces(node):
+    interfaces = []
+    cname = get_unique_name_from_gapi(node.getparent())
+    for child in node.getchildren():
+        ctype_name = child.attrib.get('cname')
+        if not ctype_name:
+            continue
+        gi_name = __TRANSLATED_NAMES[Lang.py].get(ctype_name, ctype_name)
+        href = child.attrib.get('doc')
+        link = Link(href, ctype_name, ctype_name)
+        qs = QualifiedSymbol(type_tokens=[link])
+        qs.add_extension_attribute ('gi-extension', 'type_desc',
+                SymbolTypeDesc([], gi_name, ctype_name, 0, False))
+        if href:
+            qs.add_extension_attribute ('gi-extension', 'cs_link', link)
+        interfaces.append(qs)
+    CS_IMPLEMENTED_INTERFACES[cname] = interfaces
+
+def get_csharp_interfaces(klass):
+    return CS_IMPLEMENTED_INTERFACES.get(klass, [])
 
 def cache_gapi(node, components):
     is_ns = node.tag == 'namespace'
     is_api = node.tag == 'api'
     cname = node.attrib.get('cname')
     name = node.attrib.get('name')
+
+    if node.tag == 'implements':
+        __cache_gapi_interfaces(node)
+        return
+
     if (not cname or not name) and not is_ns and not is_api:
         return
 
@@ -266,15 +293,13 @@ def cache_gapi(node, components):
             if node.attrib.get('hidden', 'false').lower() not in ['false', '0']:
                 try:
                     del __TRANSLATED_NAMES[Lang.cs][unique_name]
-                    print("Hide: %s => %s" % (unique_name, current_name))
+                    info("[csharp] Hidding: %s => %s" % (unique_name, current_name), domain='gi-overrides')
                 except KeyError:
-                    import ipdb; ipdb.set_trace()
-                    print("Already hidden: %s => %s" % (unique_name, current_name))
                     pass
 
             else:
                 if current_name != display_name and component_name not in ['GetType', 'Constants', 'Global']:
-                    print("OVERRIDE: %s => %s -> %s" % (unique_name, current_name, display_name))
+                    info("[csharp] OVERRIDE: %s => %s -> %s" % (unique_name, current_name, display_name), domain='gi-overrides')
                 __TRANSLATED_NAMES[Lang.cs][unique_name] = display_name
 
     for child in node.getchildren():

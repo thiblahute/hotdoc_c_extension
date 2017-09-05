@@ -49,7 +49,7 @@ from hotdoc_c_extension.gi_utils import *
 from hotdoc_c_extension.gi_node_cache import (
         SMART_FILTERS, make_translations, get_translation, set_translated_name, get_klass_parents,
         get_klass_children, cache_nodes, type_description_from_node,
-        is_introspectable, cache_gapi)
+        is_introspectable, cache_gapi, get_csharp_interfaces, ALL_GI_TYPES)
 from hotdoc_c_extension.gi_gtkdoc_links import GTKDOC_HREFS
 from hotdoc_c_extension.gi_symbols import GIClassSymbol, GIStructSymbol
 
@@ -92,6 +92,14 @@ Logger.register_warning_code('missing-gir-include', BadInclusionException,
 
 Logger.register_warning_code('no-location-indication', InvalidOutputException,
                              'gi-extension')
+
+
+def csharp(func):
+    def wrapper(self, *args, **kwargs):
+        if Lang.cs in self.languages:
+            func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class GIExtension(Extension):
@@ -258,6 +266,15 @@ class GIExtension(Extension):
         return None
 
     # setup-time private methods
+    @csharp
+    def __csharp_process_property(self, unique_name):
+        """Follow gtk-sharp property names 'uniquifying' way."""
+        csunique_name = unique_name.replace(':', ':CS:')
+        cs_prop = self.app.database.get_symbol(csunique_name)
+        if cs_prop:
+            set_translated_name(csunique_name, csharp=cs_prop.display_name + 'Field')
+
+    @csharp
     def __csharp_process_function(self, function, node):
         """In csharp, getters/setter are converted to properties."""
         title = get_translation(function.unique_name, 'csharp')
@@ -289,10 +306,9 @@ class GIExtension(Extension):
             return
 
         # Avoid unique name clashes, this should not be needed once we handle override.
-        display_name =  name
+        display_name = name
         if len(display_name) > 3:
             display_name = display_name[3:]
-        unique_name = '.'.join(components[:-1]) + ':Cs' + display_name
 
         if is_getter:
             type_desc = copy.deepcopy(self.get_attr(function.return_value[0], 'type_desc'))
@@ -301,6 +317,10 @@ class GIExtension(Extension):
         type_ = QualifiedSymbol(type_tokens=type_desc.type_tokens)
         self.add_attrs(type_, type_desc=type_desc)
 
+        if self.app.database.get_symbol(''.join(components[:-1]) + ':' + display_name):
+            display_name += 'Field'
+
+        unique_name = ''.join(components[:-1]) + ':CS:' + display_name.lower()
         prop = self.app.database.get_symbol(unique_name)
         if not prop:
             prop = self.get_or_create_symbol(PropertySymbol, node,
@@ -621,6 +641,8 @@ class GIExtension(Extension):
     def __create_property_symbol (self, node, parent_name):
         unique_name, name, klass_name = get_symbol_names(node)
 
+        self.__csharp_process_property(unique_name)
+
         type_desc = type_description_from_node(node)
         type_ = QualifiedSymbol(type_tokens=type_desc.type_tokens)
         self.add_attrs(type_, type_desc=type_desc)
@@ -750,6 +772,7 @@ class GIExtension(Extension):
             class_struct =  node.attrib.get(glib_ns('type-struct'))
             if class_struct:
                 self.__class_gtype_structs[class_struct] = res
+        self.add_attrs(res, csharp_interfaces=get_csharp_interfaces(unique_name))
 
         for cnode in node:
             if cnode.tag in [core_ns('record'), core_ns('union')]:
