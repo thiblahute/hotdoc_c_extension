@@ -68,7 +68,7 @@ class GIFormatter(Formatter):
 
         langs_doc = {}
         prev_lang = None
-        for lang in Lang.all():
+        for lang in self.extension.languages:
             langs_doc[lang] = None
             if is_introspectable(symbol.unique_name, lang):
                 self.extension.setup_language(lang, prev_lang)

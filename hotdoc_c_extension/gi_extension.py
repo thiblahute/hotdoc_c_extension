@@ -101,7 +101,7 @@ class GIExtension(Extension):
         Extension.__init__(self, app, project)
 
         self.languages = None
-
+        self.__default_languages = Lang.c
         self.__current_output_filename = None
         self.__class_gtype_structs = {}
         self.__default_page = DEFAULT_PAGE
@@ -141,13 +141,16 @@ class GIExtension(Extension):
             self.languages.insert (0, Lang.c)
         if not self.languages:
             self.languages = OUTPUT_LANGUAGES
+
+        self.__default_language = self.languages[0]
+        self.languages = set(self.languages)
         for gir_file in self.sources:
             gir_root = etree.parse(gir_file).getroot()
             cache_nodes(gir_root, ALL_GIRS)
 
     def __formatting_page(self, formatter, page):
         if ALL_GIRS:
-            page.meta['extra']['gi-languages'] = Lang.all()
+            page.meta['extra']['gi-languages'] = list(self.languages)
 
     def setup (self):
         for ext in self.project.extensions.values():
@@ -173,7 +176,7 @@ class GIExtension(Extension):
         page.meta['extra']['gi-languages'] = ','.join(self.languages)
         page.meta['extra']['gi-language'] = Lang.c
         Extension.format_page (self, page, link_resolver, output)
-        page.meta['extra']['gi-language'] = self.languages[0]
+        page.meta['extra']['gi-language'] = self.__default_language
 
         link_resolver.get_link_signal.disconnect(self.search_online_links)
 
@@ -614,7 +617,7 @@ class GIExtension(Extension):
         filename = self.__get_symbol_filename(name)
 
         alias_link = [l for l in type_desc.type_tokens if isinstance(l, Link)]
-        for lang in (Lang.py, Lang.js):
+        for lang in set([Lang.py, Lang.js]) & self.languages:
             fund_type = FUNDAMENTALS[lang].get(type_desc.c_name)
             if fund_type:
                 # The alias name is now conciderd as a FUNDAMENTAL type.
@@ -870,7 +873,7 @@ class GIExtension(Extension):
 
         extra_attrs = {}
         if language == 'default':
-            for lang in [Lang.py, Lang.js]:
+            for lang in {Lang.py, Lang.js} & self.languages:
                 extra_attrs['data-gi-href-%s' % lang] = self.__translate_ref(link, lang) or ref
                 extra_attrs['data-gi-title-%s' % lang] = self.__translate_title(link, lang)
 
