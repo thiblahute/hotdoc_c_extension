@@ -330,7 +330,6 @@ class GIFormatter(Formatter):
 
         if language == Lang.cs:
             if self.extension.get_attr(callable_, 'csharp_prop'):
-                print("%s IS prop" % callable_.unique_name)
                 return ''
         elif language == Lang.py and isinstance(callable_, ClassMethodSymbol):
             return None

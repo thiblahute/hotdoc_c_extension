@@ -49,7 +49,7 @@ from hotdoc_c_extension.gi_utils import *
 from hotdoc_c_extension.gi_node_cache import (
         SMART_FILTERS, make_translations, get_translation, set_translated_name, get_klass_parents,
         get_klass_children, cache_nodes, type_description_from_node,
-        is_introspectable)
+        is_introspectable, cache_gapi)
 from hotdoc_c_extension.gi_gtkdoc_links import GTKDOC_HREFS
 from hotdoc_c_extension.gi_symbols import GIClassSymbol, GIStructSymbol
 
@@ -119,6 +119,7 @@ class GIExtension(Extension):
         GIExtension.add_index_argument(group)
         GIExtension.add_sources_argument(group, allow_filters=False)
         GIExtension.add_sources_argument(group, prefix='gi-c')
+        GIExtension.add_sources_argument(group, prefix='gi-gapi')
         group.add_argument ("--languages", action="store",
                 nargs='*',
                 help="Languages to translate documentation in %s"
@@ -134,6 +135,7 @@ class GIExtension(Extension):
         super(GIExtension, self).parse_config(config)
         ALL_GIRS.update ({os.path.basename(s): s for s in self.sources})
         self.c_sources = config.get_sources('gi-c')
+        self.gapi_sources = config.get_sources('gi-gapi')
         self.languages = [l.lower() for l in config.get(
             'languages', [])]
         # Make sure C always gets formatted first
@@ -142,12 +144,21 @@ class GIExtension(Extension):
             self.languages.insert (0, Lang.c)
         if not self.languages:
             self.languages = OUTPUT_LANGUAGES
+            if not self.gapi_sources:
+                try:
+                    self.languages.remove(Lang.cs)
+                except ValueError:
+                    pass
 
         self.__default_language = self.languages[0]
         self.languages = set(self.languages)
         for gir_file in self.sources:
             gir_root = etree.parse(gir_file).getroot()
             cache_nodes(gir_root, ALL_GIRS)
+
+        for gapi_file in self.gapi_sources:
+            gapi = etree.parse(gapi_file)
+            cache_gapi(gapi.getroot(), [])
 
     def __formatting_page(self, formatter, page):
         if ALL_GIRS:
@@ -258,7 +269,7 @@ class GIExtension(Extension):
             if isinstance(parent, InterfaceSymbol):
                 self.add_attrs(function, parent_is_interface=True)
 
-        components = title.split('.')
+        components = get_translation(function.unique_name, Lang.cs).split('.')
         name = components[-1]
         if not (isinstance(function, MethodSymbol)):
             return
@@ -278,9 +289,10 @@ class GIExtension(Extension):
             return
 
         # Avoid unique name clashes, this should not be needed once we handle override.
-        unique_name = '.'.join(components[:-1]) + ':Cs' + components[-1][3:]
-        display_name = '.'.join(components[:-1]) + '.' + components[-1][3:]
-        print("Yay %s -> %s" % (function.unique_name, display_name))
+        display_name =  name
+        if len(display_name) > 3:
+            display_name = display_name[3:]
+        unique_name = '.'.join(components[:-1]) + ':Cs' + display_name
 
         if is_getter:
             type_desc = copy.deepcopy(self.get_attr(function.return_value[0], 'type_desc'))
@@ -306,7 +318,7 @@ class GIExtension(Extension):
         self.add_attrs(prop, csharp_prop=True,
                        flags=self.get_attr(prop, 'flags', []) + [
                            ReadableFlag() if is_getter else WritableFlag()])
-        set_translated_name(unique_name, None, None, None,  display_name)
+        set_translated_name(unique_name, csharp=display_name)
 
     def __get_symbol_filename(self, unique_name):
         if self.__current_output_filename:

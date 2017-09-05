@@ -59,6 +59,14 @@ def get_field_c_name_components(node, components):
     components.append(node.attrib.get(c_ns('type'), node.attrib['name']))
 
 
+def get_field_name_components(node):
+    components = []
+    while node.tag != core_ns('namespace'):
+        components.insert(0, node.attrib['name'])
+        node = node.getparent()
+
+    return [node.attrib['name']] + components
+
 def get_field_c_name(node):
     components = []
     get_field_c_name_components(node, components)
@@ -71,11 +79,25 @@ def __camel_case(components):
 
     return ''.join(x for x in components.title() if x not in [' ', '_', '-'])
 
-def set_translated_name(unique_name, c, py, js, cs):
-    __TRANSLATED_NAMES[Lang.c][unique_name] = c
-    __TRANSLATED_NAMES[Lang.py][unique_name] = py
-    __TRANSLATED_NAMES[Lang.js][unique_name] = js
-    __TRANSLATED_NAMES[Lang.cs][unique_name] = cs
+def __get_csharp_components(node, components):
+    """Handle the fact that in c# a I is prepended to interface names."""
+    if node.tag == core_ns('interface'):
+        return components[:-1] + ['I' + components[-1]]
+
+    elif node.getparent().tag == core_ns('interface'):
+        return components[:-2] + ['I' + components[-2], components[-1]]
+
+    return components
+
+
+def set_translated_name(unique_name, **kwargs):
+    override = kwargs.get('override', True)
+    for lang in Lang.all():
+        val = kwargs.get(lang)
+
+        current_val = __TRANSLATED_NAMES[lang].get(unique_name)
+        if current_val is None or override:
+            __TRANSLATED_NAMES[lang][unique_name] = val
 
 def make_translations(unique_name, node):
     '''Compute and store the title that should be displayed
@@ -92,50 +114,51 @@ def make_translations(unique_name, node):
             components = get_gi_name_components(node)
             components[-1] = components[-1].upper()
             js = py = '.'.join(components)
+
+            components = __get_csharp_components(node, components)
             cs = __camel_case(components)
     elif c_ns('identifier') in node.attrib:
         c =  unique_name
         if introspectable:
             components = get_gi_name_components(node)
-            py = gi_name = '.'.join(components)
+            py = '.'.join(components)
             js = '.'.join(components[:-2] + ['prototype.%s' % components[-1]])
 
+            components = __get_csharp_components(node, components)
             if node.tag == core_ns('constructor'):
                 cs = '.'.join(components[:-1])
+            elif node.tag == core_ns('function') and node.getparent().tag == core_ns('namespace'):
+                cs = __camel_case([components[0], 'Global'] + components[1:])
             else:
-                iname = __CS_INTERFACES_NAMES.get('.'.join(components[:-1]))
-                if iname:
-                    cs = iname + '.' + __camel_case(components[-1])
-                else:
-                    cs = __camel_case(components)
+                cs = __camel_case(components)
     elif c_ns('type') in node.attrib:
         c = unique_name
         if introspectable:
             components = get_gi_name_components(node)
             py = js = gi_name = '.'.join(components)
 
+            components = __get_csharp_components(node, components)
             if node.tag == core_ns ('constant'):
                 cs = '.'.join([components[0], 'Constants'] + components[1:])
-            elif node.tag == core_ns ('interface'):
-                cs = '.'.join(components[:-1] + ['I' + components[-1]])
-                __CS_INTERFACES_NAMES['.'.join(components)] = cs
             else:
-                cs = gi_name
+                cs = '.'.join(components)
     elif node.tag == core_ns('field'):
         components = []
         get_field_c_name_components(node, components)
         display_name = '.'.join(components[1:])
         c = display_name
         if introspectable:
-            py = cs = display_name
-            cs = __camel_case(components)
+            components = get_field_name_components(node)
+            py = js = '.'.join(components[1:])
+            cs = __camel_case(__get_csharp_components(node, components))
     else:
         c = node.attrib.get('name')
         if introspectable:
             py = js = node.attrib.get('name')
             cs = __camel_case(node.attrib.get('name'))
 
-    set_translated_name(unique_name, c, py, js, cs)
+    set_translated_name(unique_name, c=c, python=py, javascript=js, csharp=cs,
+                        override=False)
 
 
 def get_translation(unique_name, language):
@@ -195,6 +218,69 @@ def get_klass_children(gi_name):
         res[ctype_name] = qs
     return res
 
+def get_unique_name_from_gapi(node):
+    cname = node.attrib.get('cname')
+    sep = None
+    parent = node.getparent()
+    if node.tag == 'virtual_method':
+        sep = '::'
+        parent = parent.find('class_struct')
+    elif node.tag == 'property':
+        sep = ':'
+    elif node.tag == 'field':
+        sep = '.'
+    else:
+        return cname
+
+    if parent.tag == 'interface':
+        parent = parent.find('class_struct')
+
+    return parent.attrib['cname'] + sep + cname
+
+
+def get_display_name_from_gapi(node, components):
+    if node.tag == 'virtual_method':
+        return components[-1]
+    elif node.tag == 'property':
+        return components[-1]
+    return '.'.join(components)
+
+
+def cache_gapi(node, components):
+    is_ns = node.tag == 'namespace'
+    is_api = node.tag == 'api'
+    cname = node.attrib.get('cname')
+    name = node.attrib.get('name')
+    if (not cname or not name) and not is_ns and not is_api:
+        return
+
+    if not is_api:
+        component_name = node.attrib['name']
+        if node.tag == 'interface':
+            component_name = 'I' + component_name
+        components.append(component_name)
+        if not is_ns:
+            unique_name = get_unique_name_from_gapi(node)
+            display_name = get_display_name_from_gapi(node, components)
+            current_name = __TRANSLATED_NAMES[Lang.cs].get(unique_name)
+            if node.attrib.get('hidden', 'false').lower() not in ['false', '0']:
+                try:
+                    del __TRANSLATED_NAMES[Lang.cs][unique_name]
+                    print("Hide: %s => %s" % (unique_name, current_name))
+                except KeyError:
+                    import ipdb; ipdb.set_trace()
+                    print("Already hidden: %s => %s" % (unique_name, current_name))
+                    pass
+
+            else:
+                if current_name != display_name and component_name not in ['GetType', 'Constants', 'Global']:
+                    print("OVERRIDE: %s => %s -> %s" % (unique_name, current_name, display_name))
+                __TRANSLATED_NAMES[Lang.cs][unique_name] = display_name
+
+    for child in node.getchildren():
+        cache_gapi(child, components)
+    if components:
+        components.pop()
 
 def cache_nodes(gir_root, all_girs):
     '''
@@ -333,7 +419,7 @@ def is_introspectable(name, language):
     if name in FUNDAMENTALS[language]:
         return True
 
-    if name not in __TRANSLATED_NAMES[language]:
+    if __TRANSLATED_NAMES[language].get(name) is None:
         return False
 
     return True
