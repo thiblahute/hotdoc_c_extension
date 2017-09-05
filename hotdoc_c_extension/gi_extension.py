@@ -254,6 +254,24 @@ class GIExtension(Extension):
 
         return self.__default_page
 
+    def __get_class_implemented_interface(self, node):
+        res = []
+        for implemented_iface in node.findall(core_ns('implements')):
+            gi_name = implemented_iface.attrib['name']
+            if not '.' in gi_name:
+                while node.tag != core_ns('namespace'):
+                    node = node.getparent()
+                    continue
+                gi_name = node.attrib['name'] + '.' + gi_name
+
+            ctype_name = ALL_GI_TYPES[gi_name]
+            qs = QualifiedSymbol(type_tokens=[Link(None, ctype_name, ctype_name)])
+            self.add_attrs(qs, type_desc=SymbolTypeDesc(
+                [], gi_name, ctype_name, 0, False))
+            res.append(qs)
+
+        return res
+
     def __get_structure_members(self, node, filename, struct_name, parent_name,
                                 field_name_prefix=None, in_union=False):
         members = []
@@ -670,6 +688,7 @@ class GIExtension(Extension):
                                unique_name, filename):
         hierarchy = get_klass_parents(gi_name)
         children = get_klass_children(gi_name)
+        ifaces = self.__get_class_implemented_interface(node)
 
         members = self.__get_structure_members(node, filename,
                                                          klass_name,
@@ -682,7 +701,8 @@ class GIExtension(Extension):
                                         unique_name=unique_name,
                                         filename=filename,
                                         members=members,
-                                        parent_name=unique_name)
+                                        parent_name=unique_name,
+                                        interfaces=ifaces)
 
         return res
 
