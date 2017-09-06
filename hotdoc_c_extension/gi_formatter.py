@@ -27,7 +27,7 @@ from hotdoc.core.symbols import *
 import lxml.etree
 from .fundamentals import FUNDAMENTALS
 from hotdoc_c_extension.gi_node_cache import ALL_GI_TYPES, is_introspectable
-from hotdoc_c_extension.gi_symbols import GIClassSymbol
+from hotdoc_c_extension.gi_symbols import GIClassSymbol, GIStructSymbol
 from hotdoc_c_extension.gi_annotation_parser import GIAnnotationParser
 from hotdoc_c_extension.gi_utils import Lang
 
@@ -40,8 +40,10 @@ class GIFormatter(Formatter):
         Formatter.__init__(self, gi_extension)
         self._order_by_parent = True
         self._symbol_formatters.update(
-                {GIClassSymbol: self._format_class_symbol})
+                {GIClassSymbol: self._format_class_symbol,
+                 GIStructSymbol: self._format_class_symbol})
         self._ordering.insert(self._ordering.index(ClassSymbol) + 1, GIClassSymbol)
+        self._ordering.insert(self._ordering.index(GIClassSymbol) + 1, GIStructSymbol)
         self.__annotation_parser = GIAnnotationParser()
 
     def format_annotations (self, annotations):

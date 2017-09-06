@@ -50,7 +50,7 @@ from hotdoc_c_extension.gi_node_cache import (
         get_klass_children, cache_nodes, type_description_from_node,
         is_introspectable)
 from hotdoc_c_extension.gi_gtkdoc_links import GTKDOC_HREFS
-from hotdoc_c_extension.gi_symbols import GIClassSymbol
+from hotdoc_c_extension.gi_symbols import GIClassSymbol, GIStructSymbol
 
 
 DESCRIPTION=\
@@ -640,15 +640,14 @@ class GIExtension(Extension):
                 self.__class_gtype_structs[class_struct] = res
         elif symbol_type == StructSymbol:
             # If we are working with a Class structure,
+            parent_name = node.attrib.get(glib_ns('type-name'))
             class_symbol = self.__class_gtype_structs.get(node.attrib['name'])
             if class_symbol:
-                parent_name = class_symbol.unique_name
-
                 # Class struct should never be renderer on their own,
                 # smart_key will lookup the value in that dict
                 self.__class_gtype_structs[unique_name] = class_symbol
-            res = self.__create_struct_symbol(node, unique_name, filename,
-                                              class_symbol.unique_name if class_symbol else None)
+            res = self.__create_struct_symbol(node, unique_name, filename, parent_name,
+                                              bool(class_symbol))
 
             if class_symbol:
                 class_symbol.class_struct_symbol = res
@@ -688,18 +687,23 @@ class GIExtension(Extension):
         return res
 
     def __create_struct_symbol(self, node, struct_name, filename,
-                               parent_name):
+                               parent_name, is_class_struct):
 
         members = self.__get_structure_members(
             node, filename, struct_name,
             parent_name=struct_name)
 
-        if not parent_name:
-            return self.get_or_create_symbol(StructSymbol, node,
+        if parent_name:
+            stype = GIStructSymbol
+        else:
+            stype = StructSymbol
+        if not is_class_struct:
+            return self.get_or_create_symbol(stype, node,
                                       display_name=struct_name,
                                       unique_name=struct_name,
                                       anonymous=False,
                                       filename=filename,
+                                      parent_name=parent_name,
                                       members=members)
         else:
             res = StructSymbol()
