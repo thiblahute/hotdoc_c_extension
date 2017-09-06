@@ -229,8 +229,10 @@ def get_unique_name_from_gapi(node):
         parent = parent.find('class_struct')
     elif node.tag == 'property':
         sep = ':'
-    elif node.tag == 'field':
+    elif node.tag == ['field', 'union']:
         sep = '.'
+    elif node.tag == 'signal':
+        sep = '::'
     else:
         return cname
 
@@ -241,9 +243,7 @@ def get_unique_name_from_gapi(node):
 
 
 def get_display_name_from_gapi(node, components):
-    if node.tag == 'virtual_method':
-        return components[-1]
-    elif node.tag == 'property':
+    if node.tag in ['virtual_method', 'property', 'signal']:
         return components[-1]
     return '.'.join(components)
 
@@ -251,17 +251,23 @@ def __cache_gapi_interfaces(node):
     interfaces = []
     cname = get_unique_name_from_gapi(node.getparent())
     for child in node.getchildren():
-        ctype_name = child.attrib.get('cname')
-        if not ctype_name:
-            continue
-        gi_name = __TRANSLATED_NAMES[Lang.py].get(ctype_name, ctype_name)
+        name = child.attrib.get('cname')
+        if not name:
+            # Overrides use 'name' instead of cname.
+            name = child.attrib.get('name')
+            if not name:
+                continue
+        gi_name = __TRANSLATED_NAMES[Lang.py].get(name, name)
         href = child.attrib.get('doc')
-        link = Link(href, ctype_name, ctype_name)
+        link = Link(href, name, name)
         qs = QualifiedSymbol(type_tokens=[link])
         qs.add_extension_attribute ('gi-extension', 'type_desc',
-                SymbolTypeDesc([], gi_name, ctype_name, 0, False))
+                SymbolTypeDesc([], gi_name, name, 0, False))
         if href:
+            # An extra standard interface has been implemented
+            # in the overrides.
             qs.add_extension_attribute ('gi-extension', 'cs_link', link)
+            __TRANSLATED_NAMES[Lang.cs][link.id_] = name
         interfaces.append(qs)
     CS_IMPLEMENTED_INTERFACES[cname] = interfaces
 

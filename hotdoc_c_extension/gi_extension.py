@@ -275,6 +275,11 @@ class GIExtension(Extension):
             set_translated_name(csunique_name, csharp=cs_prop.display_name + 'Field')
 
     @csharp
+    def __csharp_process_field(self, field, node):
+        self.__csharp_create_property(field, self.get_attr(field, 'type_desc'),
+                                      node, [ReadableFlag(), WritableFlag()])
+
+    @csharp
     def __csharp_process_function(self, function, node):
         """In csharp, getters/setter are converted to properties."""
         title = get_translation(function.unique_name, 'csharp')
@@ -305,39 +310,50 @@ class GIExtension(Extension):
         if not is_setter and not is_getter:
             return
 
-        # Avoid unique name clashes, this should not be needed once we handle override.
-        display_name = name
-        if len(display_name) > 3:
-            display_name = display_name[3:]
-
         if is_getter:
             type_desc = copy.deepcopy(self.get_attr(function.return_value[0], 'type_desc'))
         else:
             type_desc = copy.deepcopy(self.get_attr(function.parameters[1], 'type_desc'))
-        type_ = QualifiedSymbol(type_tokens=type_desc.type_tokens)
-        self.add_attrs(type_, type_desc=type_desc)
+
+        display_name = components[-1]
+        if len(display_name) > 3:
+            display_name = display_name[3:]
+
+        flags = [ReadableFlag() if is_getter else WritableFlag()]
+        self.__csharp_create_property(function, type_desc, node, flags, display_name)
+
+    @csharp
+    def __csharp_create_property(self, symbol, type_desc, node, flags,
+                                 display_name=None):
+        name = get_translation(symbol.unique_name, Lang.cs)
+        if not name:
+            return
+        components = name.split('.')
+        if not display_name:
+            display_name = components[-1]
 
         if self.app.database.get_symbol(''.join(components[:-1]) + ':' + display_name):
             display_name += 'Field'
 
+        type_ = QualifiedSymbol(type_tokens=type_desc.type_tokens)
+        self.add_attrs(type_, type_desc=type_desc)
         unique_name = ''.join(components[:-1]) + ':CS:' + display_name.lower()
         prop = self.app.database.get_symbol(unique_name)
         if not prop:
             prop = self.get_or_create_symbol(PropertySymbol, node,
-                    # FIXME Check if there is any problem about sharing the same symbol
                     prop_type=type_,
                     display_name=display_name,
                     unique_name=unique_name,
-                    filename=function.filename,
-                    parent_name=function.parent_name)
-            comment = self.app.database.get_comment(function.unique_name)
+                    filename=symbol.filename,
+                    parent_name=symbol.parent_name)
+            comment = self.app.database.get_comment(symbol.unique_name)
             if comment:
-                self.app.database.add_comment(Comment(name=unique_name, description=comment.description))
+                self.app.database.add_comment(Comment(
+                    name=unique_name, description=comment.description))
 
-        self.add_attrs(function, csharp_prop=True)
+        self.add_attrs(symbol, csharp_prop=True)
         self.add_attrs(prop, csharp_prop=True,
-                       flags=self.get_attr(prop, 'flags', []) + [
-                           ReadableFlag() if is_getter else WritableFlag()])
+                       flags=self.get_attr(prop, 'flags', []) + flags)
         set_translated_name(unique_name, csharp=display_name)
 
     def __get_symbol_filename(self, unique_name):
@@ -371,6 +387,7 @@ class GIExtension(Extension):
     def __get_structure_members(self, node, filename, struct_name, parent_name,
                                 field_name_prefix=None, in_union=False):
         members = []
+        is_class = node.tag == core_ns('class')
         for field in node.getchildren():
             if field.tag in [core_ns('record'), core_ns('union')]:
                 if field_name_prefix is None:
@@ -417,6 +434,8 @@ class GIExtension(Extension):
                 filename=filename, display_name=name,
                 unique_name=name, parent_name=parent_name)
             self.add_attrs(member, type_desc=type_desc, in_union=in_union)
+            if not is_class or members:
+                self.__csharp_process_field(member, field)
             members.append(member)
 
         return members

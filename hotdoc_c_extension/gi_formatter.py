@@ -26,6 +26,7 @@ from hotdoc.core.formatter import Formatter
 from hotdoc.core.symbols import *
 import lxml.etree
 from .fundamentals import FUNDAMENTALS
+from hotdoc_c_extension.gi_flags import ReadableFlag, WritableFlag
 from hotdoc_c_extension.gi_node_cache import ALL_GI_TYPES, is_introspectable
 from hotdoc_c_extension.gi_symbols import GIClassSymbol, GIStructSymbol
 from hotdoc_c_extension.gi_annotation_parser import GIAnnotationParser
@@ -265,6 +266,11 @@ class GIFormatter(Formatter):
 
     def _format_members_list (self, members, member_designation, struct):
         language = struct.get_extension_attribute(self.extension.extension_name, 'language')
+
+        if language == Lang.cs:
+            # Those are properties in c#
+            return ''
+
         if language != Lang.c:
             # Never render members that are in a union, introspected won't show them
             members = [m for m in members if not m.get_extension_attribute(
@@ -276,6 +282,12 @@ class GIFormatter(Formatter):
         language = struct.get_extension_attribute(self.extension.extension_name, 'language')
         if language == Lang.c:
             return Formatter._format_struct (self, struct)
+
+        if language == Lang.cs:
+            struct.hierarchy = []
+            struct.children = {}
+            struct.interfaces = []
+            return Formatter._format_class_symbol( self, struct)
 
         members_list = self._format_members_list (struct.members, 'Attributes', struct)
 
@@ -345,15 +357,33 @@ class GIFormatter(Formatter):
 
         return super()._format_callable(callable_, callable_type, title, is_pointer)
 
+    def _format_property_prototype(self, prop):
+        language = prop.get_extension_attribute(self.extension.extension_name, 'language')
+        if language != Lang.cs:
+            return super()._format_property_prototype(prop)
+
+        type_link = self._format_linked_symbol(prop.prop_type)
+        template = self.get_template('cs_property_prototype.html')
+        flags = self.extension.get_attr(prop, 'flags')
+        getset = ''
+        for flag in flags:
+            if isinstance(flag, ReadableFlag):
+                getset += 'get; '
+            elif isinstance(flag, WritableFlag):
+                getset += 'set; '
+        return template.render({'property_name': prop.link.title,
+                                'property_type': type_link,
+                                'getset': getset})
+
     def _format_property_symbol(self, prop):
         language = prop.get_extension_attribute(self.extension.extension_name, 'language')
+
+        if language != Lang.cs and self.extension.get_attr(prop, 'csharp_prop'):
+            return ''
 
         flags = self.extension.get_attr(prop, 'flags')
         extra_content = self._format_flags (flags)
         prop.extension_contents['Flags'] = extra_content
-
-        if language != Lang.cs and self.extension.get_attr(prop, 'csharp_prop'):
-            return ''
 
         if language == Lang.py:
             prop.link.title = 'self.props.%s' % prop.display_name.replace('-', '_')
