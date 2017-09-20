@@ -267,7 +267,7 @@ class GIFormatter(Formatter):
     def _format_members_list (self, members, member_designation, struct):
         language = struct.get_extension_attribute(self.extension.extension_name, 'language')
 
-        if language == Lang.cs:
+        if language == Lang.cs and not isinstance(struct, EnumSymbol):
             # Those are properties in c#
             return ''
 
