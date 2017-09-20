@@ -219,6 +219,7 @@ def get_klass_children(gi_name):
     return res
 
 CS_IMPLEMENTED_INTERFACES = {}
+CS_NAMESPACES = set()
 
 def get_unique_name_from_gapi(node):
     cname = node.attrib.get('cname')
@@ -307,6 +308,8 @@ def cache_gapi(node, components):
                 if current_name != display_name and component_name not in ['GetType', 'Constants', 'Global']:
                     info("[csharp] OVERRIDE: %s => %s -> %s" % (unique_name, current_name, display_name), domain='gi-overrides')
                 __TRANSLATED_NAMES[Lang.cs][unique_name] = display_name
+        else:
+            CS_NAMESPACES.add(node.attrib.get('girname', node.attrib['name']))
 
     for child in node.getchildren():
         cache_gapi(child, components)

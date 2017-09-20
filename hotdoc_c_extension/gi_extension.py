@@ -49,7 +49,8 @@ from hotdoc_c_extension.gi_utils import *
 from hotdoc_c_extension.gi_node_cache import (
         SMART_FILTERS, make_translations, get_translation, set_translated_name, get_klass_parents,
         get_klass_children, cache_nodes, type_description_from_node,
-        is_introspectable, cache_gapi, get_csharp_interfaces, ALL_GI_TYPES)
+        is_introspectable, cache_gapi, get_csharp_interfaces, ALL_GI_TYPES,
+        CS_NAMESPACES)
 from hotdoc_c_extension.gi_gtkdoc_links import GTKDOC_HREFS
 from hotdoc_c_extension.gi_symbols import GIClassSymbol, GIStructSymbol
 
@@ -150,23 +151,30 @@ class GIExtension(Extension):
         if Lang.c in self.languages:
             self.languages.remove (Lang.c)
             self.languages.insert (0, Lang.c)
-        if not self.languages:
-            self.languages = OUTPUT_LANGUAGES
-            if not self.gapi_sources:
-                try:
-                    self.languages.remove(Lang.cs)
-                except ValueError:
-                    pass
 
-        self.__default_language = self.languages[0]
-        self.languages = set(self.languages)
+        namespaces = set()
         for gir_file in self.sources:
             gir_root = etree.parse(gir_file).getroot()
+            namespaces.add(gir_root.find(core_ns('namespace')).attrib['name'])
             cache_nodes(gir_root, ALL_GIRS)
 
         for gapi_file in self.gapi_sources:
             gapi = etree.parse(gapi_file)
             cache_gapi(gapi.getroot(), [])
+
+        if not self.languages:
+            self.__default_language = OUTPUT_LANGUAGES[0]
+            self.languages = set(OUTPUT_LANGUAGES)
+            if not namespaces & CS_NAMESPACES:
+                try:
+                    self.languages.remove(Lang.cs)
+                except ValueError:
+                    pass
+            else:
+                self.languages.add(Lang.cs)
+        else:
+            self.__default_language = self.languages[0]
+            self.languages = set(self.languages)
 
     def __formatting_page(self, formatter, page):
         if ALL_GIRS:
